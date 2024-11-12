@@ -2,4 +2,4 @@
 
 |        Folder         |       Description      |
 | :-------------------: | :----------------------|
-| XML parsing           | Parsing for xml per aggrement from web service|
+| XML parsing           | Parsing for xml from 1C web service per an agreement|
