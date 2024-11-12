@@ -1,0 +1,194 @@
+Sub Parsing_XML (path, name)
+	
+    //сначала нам нужно понять, сколько строк в датасете, так как каждая строка представялет собой отдельный файл XML
+    MainRows:
+    Load 
+        RowNum,
+        xml_row
+    FROM $(path)(qvd);
+
+    let vMainRowCount = NoOfRows('MainRows');
+    trace Количество строк $(vMainRowCount);
+
+    drop table MainRows;
+
+    // теперь парсим каждую строку в датасете
+    For k = 1 to '$(vMainRowCount)'
+
+          [xmltable]:
+          LOAD
+              xml_row as xml_string
+          FROM $(path)(qvd)
+          where RowNum = $(k);
+
+         // считаем сколько есть строк в датасете
+        // число нужно чтобы утсановить предел, чтобы добавить правильный id для джоина в таблицу с колонками
+        // и вообще понять, если данные в датасете
+        // c помощью From_Field делаем из поля xml_string таблицу нужного нам формата
+        [xml_rows]:
+        LOAD
+            recno() as RecId,
+            Value%Table  as table
+        From_Field(xmltable,xml_string)(xmlSimple, table is [ValueTable/row/Value]);
+
+        let vRowCount = NoOfRows('xml_rows');
+        trace Количество строк $(vRowCount);    
+
+        if vRowCount > 0 then
+
+            drop table [xml_rows];
+
+            //считаем сколько есть колонок в датасете, чтобы дальше распределять строки по нужному количеству колонок
+            [xml_column]:
+            LOAD
+                recno() as RecId,
+                Name
+             From_Field(xmltable,xml_string)(xmlSimple, table is [ValueTable/column],no eof);
+
+            let vColCount = NoOfRows('xml_column');
+            //trace '$(vColCount)';
+
+            let vCount = '$(vRowCount)'/'$(vColCount)' - 1;
+            //trace '$(vCount)' + 1;
+
+            // каждый раз добавляем количество колонок, чтобы у каждой строчки было свое правильное название колонки
+            //т.е. 1 колонка - Контрагент, через 35 колонки, 36 - снова контрагент (если vColCount =  35)
+            for i = 1 to '$(vCount)' 
+            //  	trace  '$(i)';
+                Concatenate
+                LOAD
+                  recno() + '$(vColCount)' * '$(i)'  as RecId,
+                  Name
+                From_Field(xmltable,xml_string)(xmlSimple, table is [ValueTable/column],no eof);
+
+            next i;
+
+            // теперь к каждой колонке присоединяется своя строчка по RecId
+            left join(xml_column)
+            LOAD
+                recno() as RecId,
+                Value%Table  as table
+            From_Field(xmltable,xml_string)(xmlSimple, table is [ValueTable/row/Value]);
+
+            // дальше необходимо дать RecId для будущих номеров строк, т.е.все строчки с RecId 1-35 (в случаем если vColCount =  35) станут RecId 1, строчки 36-70 - RecId - 2
+            // для xml_0 делаем такое преобразование пока что только для первых 35 строк
+            NoConcatenate
+            xml_0:
+            LOAD      
+                if (
+                    RecId >= 1 and RecId<='$(vColCount)',
+                    1,
+                    RecId) as RecId,
+                  Name,
+                  table
+            RESIDENT xml_column; 
+
+            drop table xml_column;
+
+            // цикл для испралвения RecId 
+            // теперь сделаем исправления для всех строк как планировали на строчке 59
+            for i = 1 to ('$(vCount)' +1)
+            //  	trace  '$(i)';
+                let j = '$(i)' - 1;
+
+                NoConcatenate
+                'xml_$(i)':
+                LOAD      
+                    if (
+                        RecId >= (1 + '$(vColCount)' * '$(i)') and RecId<= ('$(vColCount)' + '$(vColCount)' * '$(i)'),
+                        '$(i)' + 1,
+                        RecId) as RecId,
+                      Name,
+                      table
+                RESIDENT 'xml_$(j)';   
+
+                drop table 'xml_$(j)';
+            next i;
+
+            // забираем получившуюся таблицу в новую
+            // и так как цикл заканичвался был до '$(vCount)'+1, то отнимаем 1, чтобы в новую таблицу попали корректные данные
+            let i = '$(i)' - 1;
+
+            // дальше разбиваем всю таблицу по колонке, где каждя строчка из этой колонки будет как отдельная строчка
+            // данный шаг необходим, чтобы перевернуть таблицу
+            Data: 
+            GENERIC LOAD 
+              RecId,
+              Name,
+              table
+            RESIDENT 'xml_$(i)'; 
+            DROP TABLE 'xml_$(i)';
+
+            // дальше нужно все таблицы свести в одну
+            // создаем список имен всех созданных таблиц
+            Set vListOfTables = ;
+            For vTableNo = 0 to NoOfTables()
+                Let vTableName = TableName($(vTableNo)) ;
+                Let vListOfTables = vListOfTables & If(Len(vListOfTables)>0,',') & Chr(39) & vTableName & Chr(39) ;
+            Next vTableNo
+
+            // выбираем точку присоединения для будущей таблицы - нам важны только id строк, чтобы другие таблицы присоеденились по ним
+            // выбрать можно любую таблицу
+            CombinedGenericTable:
+            Load distinct
+                RecId
+            Resident [Data.Контрагент];
+
+            // по списку таблиц присоединяем по очереди все таблицы к CombinedGenericTable
+            For each vTableName in $(vListOfTables)
+                If vTableName like 'Data.*' Then
+                    Left Join (CombinedGenericTable)
+                    Load * Resident $(vTableName);
+                    Drop Table $(vTableName);
+                Endif
+            Next vTableName;
+
+            //дальше нам необходимо все выгрузки сделать как одну большую таблицу, чтобы исключить момент, когда меняется кол-во договоров 
+            // и датасеты могут сохраняться с разными числами в разные дни, что будет давать дублирование данных
+            // Динамически создаем новый алиас для таблицы
+            LET vAlias = 'TempTable_' & $(k);
+
+            // Загружаем данные во временную таблицу
+            NoConcatenate
+            [$(vAlias)]:
+            LOAD
+                * 
+            Resident CombinedGenericTable;
+
+            drop table CombinedGenericTable;
+
+            // Если это первая итерация, создаем основную таблицу
+            IF k = 1 THEN
+                NoConcatenate
+                MainTable:
+                LOAD
+                    *
+                RESIDENT [$(vAlias)];
+            ELSE
+                // В противном случае, соединяем с предыдущей версией основной таблицы
+                CONCATENATE (MainTable) 
+                LOAD
+                    *
+                RESIDENT [$(vAlias)];
+            END IF;
+
+            // Удаляем временную таблицу
+            DROP TABLE [$(vAlias)];
+
+        end if;
+
+       DROP TABLE xmltable;
+    next;
+
+    store MainTable into '$(gv_TransformFolder)/1С ШР_$(name).qvd' (qvd);
+
+    drop table MainTable;	
+    
+End sub;
+
+
+//// ~~~~ ПИ ~~~~
+let path = '$(gv_ExtractFolder)/КодШР/main_data_ПИ.qvd';
+let name = 'ПИ';
+
+Call Parsing_XML (path, name);
