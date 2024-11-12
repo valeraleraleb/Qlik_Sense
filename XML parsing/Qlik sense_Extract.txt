@@ -1,0 +1,148 @@
+LIB CONNECT TO '1С ШР';
+
+[Agreements]:
+LOAD distinct
+    КодШР as ДоговорКод
+FROM [lib://Qlik Sense Server Space/Extract/.....qvd]
+(qvd)
+WHERE Организация = '...'and len(КодШР) <> 0
+;
+
+// Определение переменных
+LET vTotalRows = NoOfRows('Agreements'); // Общее количество строк в исходном датасете
+LET vBatchSize = 5; // Размер пакета (5 строк = 5 договоров)
+
+//trace $(vTotalRows);
+
+// Цикл по блокам по десять строк
+FOR vStartRow = 0 TO vTotalRows STEP vBatchSize //////// TO vTotalRows
+    // Ограничение диапазона строк
+    NoConcatenate
+    Batch:
+    LOAD
+        ДоговорКод as Agreements
+    RESIDENT Agreements
+    WHERE RecNo() >= $(vStartRow) + 1 AND RecNo() <= $(vStartRow) + $(vBatchSize);
+    
+    // делаем из выбранных договоров список для передачи в REST
+    let v_agreement = '';
+
+	for each agreement in FieldValueList('Agreements')
+
+    	let v_agreement = v_agreement & ',' & '$(agreement)';
+
+	next agreement;
+    
+    let v_agreement = mid('$(v_agreement)', 2);
+ 
+    // Выполнение действий с текущим блоком данных
+    // через цикл для каждого из договоров мы получаем данные их XML строчки, котрую дальше парсим на названия столбцов(columns) и значения(rows)  
+	// так как все значения попадают в одноу строчку [@Content], то передадим ее в переменную и будем парсить эту переменную
+
+	//-------------------------------------- часть с выгрузкой данных
+	
+	//trace Выгружается данные для $(v_agreement);
+	
+
+    Let vRequestBody ='';
+
+    let vRequestBody = vRequestBody &'<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:web="http://sibur.ru/integration/QlikSense"><soapenv:Header/> ';
+    let vRequestBody = vRequestBody &'<soapenv:Body>';
+    let vRequestBody = vRequestBody &'<web:GetContractExecution>';
+    let vRequestBody = vRequestBody &'<web:ContractCode>$(v_agreement)';
+    let vRequestBody = vRequestBody &'</web:ContractCode>';
+    let vRequestBody = vRequestBody &'</web:GetContractExecution>';
+    let vRequestBody = vRequestBody &'</soapenv:Body>';
+    let vRequestBody = vRequestBody &'</soapenv:Envelope>';
+    let vRequestBody = replace(vRequestBody,'"', chr(34)&chr(34));
+
+    //trace $(vRequestBody);
+
+    RestConnectorMasterTable:
+    SQL SELECT 
+        "__KEY_Envelope",
+        (SELECT 
+            (SELECT 
+                (SELECT 
+                    "attr:xs" AS "xs",
+                    "attr:xsi" AS "xsi",
+                    "@Content",
+                    "__FK_return"
+                FROM "return" FK "__FK_return" ContentFieldAlias "@Content")
+            FROM "GetContractExecutionResponse" PK "__KEY_GetContractExecutionResponse" FK "__FK_GetContractExecutionResponse")
+        FROM "Body" PK "__KEY_Body" FK "__FK_Body")
+    FROM XML "Envelope" PK "__KEY_Envelope"
+    WITH CONNECTION (
+      URL "https://.../QlikSense.1cws",
+      BODY "$(vRequestBody)"
+    );
+
+    [return]:
+    LOAD	[xs],
+        [xsi],
+        [@Content],
+        [__FK_return] AS [__KEY_GetContractExecutionResponse]
+    RESIDENT RestConnectorMasterTable
+    WHERE NOT IsNull([__FK_return]);
+
+    DROP TABLE RestConnectorMasterTable;
+
+    let xml_str = Peek('@Content', 0, 'return');
+    //trace значение $(xml_str);
+
+    drop table return; 
+
+    // Динамически создаем новый алиас для таблицы
+    LET vAlias = 'TempTable_' & $(vStartRow);
+
+    // Загружаем данные во временную таблицу
+    NoConcatenate
+    [$(vAlias)]:
+    LOAD
+    	'$(xml_str)' AS xml_row 
+    AutoGenerate 1;
+	
+    // Если это первая итерация, создаем основную таблицу
+    IF vStartRow = 0 THEN
+    	NoConcatenate
+        MainTable#tmp:
+        LOAD
+            *
+             , len(xml_row) as длина // для сортировки, чтобы дальше в цикле не было ошибок, если строчек в данных нет
+        RESIDENT [$(vAlias)];
+    ELSE
+        // В противном случае, CONCATENATE с предыдущей версией основной таблицы
+        CONCATENATE (MainTable#tmp) 
+        LOAD
+            *
+            , len(xml_row) as длина
+        RESIDENT [$(vAlias)];
+    END IF;
+
+    // Удаляем временную таблицу
+    DROP TABLE [$(vAlias)];
+    
+    let xml_str = Null();
+    
+   	DROP TABLE Batch;
+    
+//    sleep 1000 * 30; // ожидание 30 сек, чтобы не грузить систему быстрыми запросами, иначе она виснет
+   
+NEXT vStartRow;
+
+DisConnect;
+
+// добавляем номера строк, чтобы дальше парсить в цикле по RowNum
+NoConcatenate
+[MainTable]:
+Load 
+	RecNo() as RowNum
+	, xml_row 
+Resident MainTable#tmp
+ORDER by длина DESC;   // первым должен идти та строчка, где есть rows (больше всего длина строки), чтобы заработал цикл в Transform
+
+drop table MainTable#tmp;
+
+store MainTable into '$(gv_ExtractFolder)/КодШР/main_data_ПИ.qvd' (qvd);
+
+drop Tables MainTable, Agreements;
