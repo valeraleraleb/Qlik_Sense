@@ -1,0 +1,9 @@
+LET vL.NumTabelle = NoOfTables();
+ 
+FOR j=0 to $(vL.NumTabelle)-1
+ 
+LET vL.nomeTabella = TableName(0);
+ 
+  DROP Table [$(vL.nomeTabella)];
+ 
+NEXT j;

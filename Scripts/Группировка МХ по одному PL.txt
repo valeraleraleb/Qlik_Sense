@@ -1,0 +1,7 @@
+LOAD
+    text(Concat(distinct "Placeforstorage/Местохранения", ', ')) as "Placeforstorage/Местохранения",
+    //Upper(KeepChar([Description/ Спецификация], 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя0123456789')) as ост_НК_корр
+    upper(text(left("Packing list #/ № Упаковочный лист", index("Packing list #/ № Упаковочный лист",'-Pa')-1))) as PL
+FROM [lib://Qlik Sense Server Space/....xlsx]
+(ooxml, embedded labels, table is Лист1)
+group by upper(text(left("Packing list #/ № Упаковочный лист", index("Packing list #/ № Упаковочный лист",'-Pa')-1)));

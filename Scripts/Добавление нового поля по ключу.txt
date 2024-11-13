@@ -1,0 +1,33 @@
+// забираем старые данные в цикле по проектам
+For Each lv_file in filelist ('lib://.../Документы_*.qvd')
+ 
+    let  lv_file_name =  TextBetween('$(lv_file)', '_', '.qvd', 1);
+      
+    [main]:
+    LOAD
+    *
+    FROM '$(lv_file)' (qvd);
+     
+    //таблица для джоина с новым полем
+    For Each lv_file_1 in filelist ('lib://Qlik Sense Server Space/#Test/.../Документы_*.qvd')
+     
+        let  lv_file_name_1 =  TextBetween('$(lv_file_1)', '_', '.qvd', 1);
+         
+        // проверка на совпадение проектов
+        if '$(lv_file_name_1)' = '$(lv_file_name)' then
+             
+            left join(main)
+            load distinct
+                r_object_id,
+                r_creator_name
+            FROM '$(lv_file_1)' (qvd);
+             
+            store [main] into 'lib://Qlik Sense Server Space/#Test.../merge/Документы_$(lv_file_name).qvd' (qvd);
+             
+            drop table main;
+             
+         end if;
+         
+    next lv_file_1;
+     
+next lv_file;

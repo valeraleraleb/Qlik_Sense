@@ -1,0 +1,16 @@
+FOR each lv_file in filelist ('lib://Qlik Sense Server Space/...корресп/Корреспонденция_*.qvd')
+     
+    let  lv_file_name =  TextBetween('$(lv_file)', 'корресп/', '_', 1); 
+    trace '$(lv_file_name)'; 
+     
+    [main]:
+    LOAD
+    *,
+    date#(Today(), 'DD.MM.YYYY') as load_date
+    FROM '$(lv_file)' (qvd)
+    ;
+ 
+NEXT lv_file;
+
+store main into 'lib://Qlik Sense Server Space/.../$(lv_file_name).qvd' (qvd);
+drop table [main];
