@@ -1,9 +1,7 @@
 // блок кода должен располагаться на первом месте (до блока Main) (.qvf)
 // подгружаем модель из другого приложения
 
-binary 'lib://Qlik Sense Server Space/1.qvf';
-
- 
+binary 'lib://Qlik Sense Server Space/...qvf';
 
 // сохраняем таблицу в qvd
 
@@ -15,7 +13,7 @@ for i = 0 to NoOfTables() - 1
 
     trace $( d );
 
-    store [$( d )] into [lib://Qlik Sense Server Space/#Test/goncharovalv/$(d).qvd] (qvd);
+    store [$( d )] into [lib://Qlik Sense Server Space/.../$(d).qvd] (qvd);
 
 next
 
