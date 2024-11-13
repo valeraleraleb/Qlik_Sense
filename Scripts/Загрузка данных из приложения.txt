@@ -1,0 +1,36 @@
+// блок кода должен располагаться на первом месте (до блока Main) (.qvf)
+// подгружаем модель из другого приложения
+
+binary 'lib://Qlik Sense Server Space/1.qvf';
+
+ 
+
+// сохраняем таблицу в qvd
+
+let lv_a = NoOfTables();
+
+for i = 0 to NoOfTables() - 1
+
+    let d = TableName( i );
+
+    trace $( d );
+
+    store [$( d )] into [lib://Qlik Sense Server Space/#Test/goncharovalv/$(d).qvd] (qvd);
+
+next
+
+ 
+
+// если таблицы не нужны в текущем приложении - удаляем их
+
+let j = NoOfTables();
+
+do while j > 0
+
+    let d = TableName(0);
+
+    drop table [$(d)];
+
+    let j = NoOfTables();
+
+loop
