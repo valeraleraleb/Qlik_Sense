@@ -1,0 +1,56 @@
+﻿//-----------------------------------------------------------------------------------------------------------
+// режим запуска. Для опубликованных приложений gv_Dgb = True, для не опубликованных gv_Dgb = False
+//-----------------------------------------------------------------------------------------------------------
+let vDoc = DocumentName();
+
+LIB CONNECT TO 'monitor_apps_REST_app';
+
+RestConnectorMasterTable:
+SQL SELECT 
+	"id" AS "id_u1",
+	"published",
+	"stream",
+	"__KEY_root"
+FROM JSON (wrap on) "root" PK "__KEY_root";
+
+[root]:
+LOAD	
+	[id_u1] AS [id],
+	[published],
+	[stream]
+RESIDENT RestConnectorMasterTable
+WHERE NOT IsNull([__KEY_root])
+and id_u1 = '$(vDoc)';
+
+DROP TABLE RestConnectorMasterTable;
+
+let gv_Published = Peek('published', 0, 'root');
+//trace $(gv_Published);
+
+trace -------------------------------;  
+if gv_Published = True() then
+	 trace Приложение опубликовано;
+     set gv_Dbg = False;
+else	
+	trace Приложение НЕ опубликовано;
+    set gv_Dbg = True;
+end if
+trace -------------------------------; 
+
+trace Режим отладки: $(gv_Dbg);
+
+trace -------------------------------; 
+
+drop table root;
+
+DisConnect;
+
+//-----------------------------------------------------------------------------------------------------------
+//имя пользователя. Используется в отладке (gv_Dgb = False) как имя папки пользователя
+//-----------------------------------------------------------------------------------------------------------
+let gv_userName = SubField(OSUser(), '=', -1);
+let dash_name = DocumentTitle( );
+trace Имя пользователя: $(gv_userName);
+trace Имя дашборда '$(dash_name)';
+//-----------------------------------------------------------------------------------------------------------
+trace -------------------------------; 
