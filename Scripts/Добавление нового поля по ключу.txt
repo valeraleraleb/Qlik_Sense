@@ -4,8 +4,7 @@ For Each lv_file in filelist ('lib://.../Документы_*.qvd')
     let  lv_file_name =  TextBetween('$(lv_file)', '_', '.qvd', 1);
       
     [main]:
-    LOAD
-    *
+    LOAD *
     FROM '$(lv_file)' (qvd);
      
     //таблица для джоина с новым полем
