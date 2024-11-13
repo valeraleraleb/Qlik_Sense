@@ -7,5 +7,5 @@
 | Incremental loading   | Different modes of inc. loading |
 | Mailing               | Codes for mailing |
 | Models                | Creating data model |
-| Models                | Short scripts |
+| Scripts               | Short scripts |
 
