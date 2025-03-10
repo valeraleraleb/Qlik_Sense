@@ -1,3 +1,5 @@
+// RU
+
 FOR each lv_file in filelist ('lib://Qlik Sense Server Space/...корресп/Корреспонденция_*.qvd')
      
     let  lv_file_name =  TextBetween('$(lv_file)', 'корресп/', '_', 1); 
