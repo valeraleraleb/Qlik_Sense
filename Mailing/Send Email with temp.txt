@@ -1,0 +1,27 @@
+﻿Sub ExecEmail (QwcConnectionName, Timestamp, ServerName, Link, Subject, To, MailBodyInput, WebConnectorsLib, UserName, Password, SMTPServer, Port, SSLmode, html, fromName, fromEmail, delayInSeconds, ignoreProxy)
+
+//Проходимся по всем полям кроме пароля
+for Each item in 'QwcConnectionName', 'Timestamp', 'ServerName', 'Link', 'Subject', 'To', 'MailBodyInput', 'WebConnectorsLib', 'UserName', 'SMTPServer', 'Port', 'SSLmode', 'html', 'fromName', 'fromEmail', 'delayInSeconds', 'ignoreProxy'
+
+  call StringDecoder($(item));
+  set $(item)_temp = $(EncodeString);
+  //let temp_var = '$(item)' & '_temp';
+  //let $(temp_var) = $(EncodeString);
+  //Trace $(EncodeString);
+  //Trace $(temp_var) = $([$(temp_var)]);
+  
+next
+
+Trace 'http://localhost:5555/data?connectorID=SMTPConnector&table=SendEmail&UserName=$(UserName_temp)&Password=$(Password_temp)&SMTPServer=$(SMTPServer_temp)&Port=$(Port_temp)&SSLmode=$(SSLmode_temp)&to=$(To_temp)&subject=$(Subject_temp)&message=$(MailBodyInput_temp)&html=$(html_temp)&fromName=Qlik+Sender&fromEmail=A201-QS-SMTP%40....ru&delayInSeconds=0&ignoreProxy=False&appID=';
+
+SMTPConnector_SendEmail:
+LOAD
+    status as SendEmail_status,
+    result as SendEmail_result,
+    filesattached as SendEmail_filesattached
+FROM [$(vQwcConnectionName)]
+(URL IS [http://localhost:5555/data?connectorID=SMTPConnector&table=SendEmail&UserName=$(UserName_temp)&Password=$(Password)&SMTPServer=$(SMTPServer_temp)&Port=$(Port_temp)&SSLmode=$(SSLmode_temp)&to=$(To_temp)&subject=$(Subject_temp)&message=$(MailBodyInput_temp)&html=$(html_temp)&fromName=Qlik+Sender&fromEmail=A201-QS-SMTP%40....ru&delayInSeconds=0&ignoreProxy=False&appID=], qvx);
+
+
+
+End Sub;
