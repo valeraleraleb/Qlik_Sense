@@ -1,0 +1,52 @@
+// RU
+///////////////// 1. Извлечение данных по базам
+
+Sub Parsing_XML_new (path_from, path_to)
+	trace $(path_from) -> $(path_to);
+
+	Execute C:\ProgramData\Anaconda\python.exe "C:\QLIK\Scripts\СквознойОтчетXMLparse\updateШР.py" "$(path_from)" "$(path_to)";
+End sub
+
+For each name in '[name_1]','[name_1]'
+
+	let todayIs = Date(today(1),'YYYY/MM/DD');
+    
+    //// ~~~~ путь к файлу эскпорта ~~~~
+    let path = '$(gv_ExtractFolder)\КодШР\main_data_$(name).qvd';
+
+    //// ~~~~ путь для сохранения ~~~~
+    let savePath = '$(gv_TransformFolder)\1С ШР_$(name).qvd';
+    
+    Call Parsing_XML_new (path, savePath);
+    
+    // выгружает логи общей строкой
+    [temp_t]: 
+    LOAD
+        "date | status | path"
+    FROM [$(gv_TransformFolder)\update.log]
+    	(txt, utf8, embedded labels, delimiter is '*', msq);
+
+	// забираем последнюю чтобы проверить успешность трансформации
+	let lastRaw = Peek('date | status | path' ,-1, 'temp_t');
+    Drop Table [temp_t];
+    
+    // проверяем поля и вызываем несуществующий метод на случай ошибки в скрипте py
+    if Index (lastRaw, Text(todayIs)) = 0 or Index (lastRaw, 'Saved QVD') = 0 or Index (lastRaw, name) = 0 then
+            CALL ThrowError ('При трансформации возникла ошибка $(lastRaw)');
+    endif
+Next;
+///////////////// 1. Извлечение данных по базам
+
+///////////////// 2. Logs
+
+// для оперативного мониторинга внутри дашборда ошибок лога выгружает таблицу после всех процедур
+
+[log_table]: 
+LOAD
+    "date",
+    status,
+    path
+FROM [$(gv_TransformFolder)\update.log]
+(txt, utf8, embedded labels, delimiter is '|', msq);
+
+///////////////// 2. Logs
