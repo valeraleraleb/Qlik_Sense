@@ -1,0 +1,288 @@
+// RU
+
+///////////////////////////// info
+/* 
+Отправка сообщений происходит через SMTP Connector
+Чтобы проверить вручную отправку сообщений:
+    1. Заходим на rdp s201as-cn1.[host].local
+    2. В браузере открываем http://localhost:5555/web/connector/SMTPConnector
+    3. Вводим параметры сообщения, отправляем
+    4. Проверяем, что сообщение дошло
+*/
+
+/*
+	При ручной проверке генерируется пример ссылки. Пароль в приложении взят из этой ссылки. 
+    Как пароль от учетки превратился в эту конструкцию - не изучали подробно, по принципу - работает-не трогай.
+*/
+///////////////////////////// info
+
+
+///////////////////////////// 0.Import
+trace 'import begin';
+
+//Функция декодер
+//https://www.urldecoder.org/ - Decode from URL-encoded format
+$(Include=[lib://Qlik Sense Server Space/Func/Decoder/Decoder.txt])
+Let EncodeString = Null();
+
+//Функция отправки писем
+$(Include=[lib://Qlik Sense Server Space/Func/Send Email/Send Email with temp.txt])
+
+trace 'import end';
+
+///////////////////////////// 0.Import
+
+///////////////////////////// 1.Vars
+
+//-----------------------------------------------------------------------------------------------------------
+//загружаем служебные переменные (общие для всех приложений)
+//gv_Dbg - если приложение опубликовано, то gv_Dbg = False(). Если приложение неопубликовано, то gv_Dbg = True()
+//gv_userName - имя текущего пользователя. Нужно, чтобы во время отладки (gv_Dbg = True) работать с данными в папках пользователя
+//-----------------------------------------------------------------------------------------------------------
+$(Include=[lib://Qlik Sense Server Space/Func/Init block/Vars3.txt]);
+// let gv_Dbg = False();  //расскомментировать, если нужна неопубликованное приложение запускать в продуктивном режиме
+// let gv_Dbg = True();
+//-----------------------------------------------------------------------------------------------------------
+
+//-----------------------------------------------------------------------------------------------------------
+//доп.переменные
+//gv - глобальные переменные. Могут использоваться в любом модуле
+//lv - локальные переменные. Используются только в пределах этого файла
+//-----------------------------------------------------------------------------------------------------------
+
+
+//-----------------------------------------------------------------------------
+/*
+ Приложение запускается по тригеру - Failed какого-то другого таска
+ Приложение точно не знает, кто его вызвал. 
+ Чтобы вывести имя того, кто мог вызвать ошибку, мы будем выводить из QLogs имена тасков, упавшие за последние gv_intervalMinute минут
+*/
+//-----------------------------------------------------------------------------
+let gv_intervalLog;
+let gv_scnned;
+set gv_pathDateTime = 'lib://Qlik Sense Server Space/Func/FailedTaskMail/lastTimeSent.txt';
+
+//Время скаинорвания
+let gv_scanned = TimeStamp(now(), 'YYYY-MM-DD hh:mm:ss');
+
+[lastTimeStamp]:
+Load
+    @1 as lo_dateTime
+FROM '$(gv_pathDateTime)'
+(txt, utf8, no labels, delimiter is '\t', msq);
+
+//Время последнего сканирования
+gv_intervalLog = Peek('lo_dateTime',1,'lastTimeStamp');
+Trace Интервал с $(gv_intervalLog) по $(gv_scanned);
+
+
+//-----------------------------------------------------------------------------
+
+
+//-----------------------------------------------------------------------------
+let gv_qwcConnectionName	= 'lib://SMTPMessages';
+let gv_timestamp 			= now();
+let gv_serverName 			= 's201as-cn1.[host].local';
+let gv_link 				= '';
+let gv_subject 				= 'Падение таска(ов) на сервере s201as-cn1.[host].local';
+set gv_to 					= 'lebedevava@[host].ru'; 
+set gv_webConnectorsLib 	= 'http://localhost:5555/';
+set gv_userName 			= '[HOST]\A201-QS-SMTP';
+set gv_password 			= '..';
+set gv_SMTPServer 			= 'smtp.[host].local';
+set gv_port 				= '25';
+set gv_SSLmode				= 'None';
+set gv_html 				= 'True';
+set gv_fromName 			= 'Qlik Sender';
+set gv_fromEmail 			= 'A201-QS-SMTP@[host].ru';
+set gv_delayInSeconds 		= '0';
+set gv_ignoreProxy 			= 'False';
+
+if gv_Dbg = True() then
+	gv_to 		= 'lebedevava@[host].ru;'; 		
+    gv_subject 	= 'ТЕСТ РАССЫЛКИ Падение таска(ов) на сервере s201as-cn1.[host].local';
+end if
+//-----------------------------------------------------------------------------
+
+///////////////////////////// 1.Vars
+
+
+///////////////////////////// 1.1 Точечная рассылка
+
+Sub AddReciverByFailedTask	
+// 	таблица маппинга по таскам
+    Call DivInTable;
+
+// маппинг и сборка по сабстрингку так как extract не имеет отсылки к проекту
+    [t_temp_byMail]:
+    Load Distinct *,
+    if(
+        index(MapSubString('mapLines', task_name), '╟') <> 0 and index(MapSubString('mapLines', task_name), '╣') <> 0
+        ,TextBetween(MapSubString('mapLines', task_name), '╟', '╣')
+        ,''
+        ) as getter
+    Resident [view_task_execution_scheduler];
+    
+//     группируем получаетей по таску на случай разделения в предыдущем
+    NoConcatenate
+    [t_byMail]:
+    Load
+    	task_name,
+        Concat(getter,';' ) as getter
+   	Resident [t_temp_byMail]
+    Group By task_name
+    Order by getter;
+    
+//     группируем по получаетелям, чтобы далее минимизировать количество рассылок-писем
+    NoConcatenate
+    [t_ForCycleMailing]:
+    Load
+    	Concat(task_name,'<br>') as tasksName,
+        getter
+    Resident [t_byMail]
+    Group By getter;
+    
+    Drop Tables [t_temp_byMail], [t_byMail];
+    
+end Sub
+
+Sub DivInTable
+	/*
+    Добавлять слева наименование таска, справа получателя через ;
+    Если такс принадлоежи проетку, то достаточно ключевого слова
+    */
+	//view_task_execution_scheduler
+
+	[mapLinesSource]:
+    Load Distinct *
+    Inline "
+		task_name					   	| emailToSent
+    		[MARV] [06] [Load] Мониторинг рабочего времени		| [name]@[host].ru;
+            [Extract] Crocotime  					| [name]@[host].ru;
+	" (delimiter is '|');
+
+
+/*
+Так как в список получателей могут быть внесены в хаотичном порядке, то далее по логике алгоритма пользователь1, пользователь2 это не тоже самое что и пользователь2, пользователь1
+В связи с этим добавлен модуль который сортирует получаетелей в правильном порядке и возвращает ту же самую таблицу, но в корректном перечислении
+*/
+Call SortByReciever;
+
+// Мап таблица для тасков с ключами выделения из текса, чтобы были уникальными.
+    [mapLines]:
+    Mapping load
+    	task_name,
+    	'╟' & emailToSent & '╣' as emailToSent
+    Resident [mapLinesSource];
+    
+    Drop Table [mapLinesSource];
+end sub
+
+Sub SortByReciever
+	// разделяем по разделителю (масло масленное)
+	[temp_t]:
+    Load
+    	task_name,
+    	SubField(emailToSent, ';') as emailToSent_2
+    Resident mapLinesSource
+    ;
+    //убираем таблицу чтобы перегрузить снова
+    Drop Table mapLinesSource;
+    //собираем с сортировкой и убираем возможные пустоты
+    NoConcatenate
+    [mapLinesSource]:
+    Load 
+    	task_name,
+        Concat(emailToSent_2,';') as emailToSent
+    Resident [temp_t]
+    Where Len(emailToSent_2) > 0
+    Group By task_name
+    Order By emailToSent_2
+    ;
+    
+    Drop Table [temp_t];
+end sub
+
+///////////////////////////// 1.1 Точечная рассылка
+
+
+///////////////////////////// 2. Отправка писем
+
+Sub ReUpdateDate
+	// save now
+  if gv_Dbg = 'False' then
+      TableDate:
+      LOAD '$(gv_scanned)' as [ ]
+      AutoGenerate 1;
+
+      Store TableDate into $(gv_pathDateTime)(txt);
+      Drop Table TableDate;
+  End if
+End sub
+
+//получаем список task'ов, которые упали за последние gv_intervalLog минут
+
+LIB CONNECT TO 'QLogs';
+[view_task_execution_scheduler]:
+SELECT
+    "task_name"
+FROM "public"."view_task_execution_scheduler"
+where 
+	status in ('FinishedFail', 'Aborted')
+    and 
+    entry_timestamp > '$(gv_intervalLog)'
+ORDER BY "entry_timestamp" DESC
+;
+
+//КОСТЫЛЬ. Почему-то, при срабатывании бывает, что в таблице view_task_execution_scheduler пусто, и письма приходят пустые. 
+//Пробуем не отправлять пустые письма, и наблюдаем, будут ли реально отвалившиеся таски в qmc
+
+Let lv_cntErrorTasks = NoOfRows('view_task_execution_scheduler');
+Trace tasker failed $(lv_cntErrorTasks);
+if (lv_cntErrorTasks = 0) then
+	trace в таблице "view_task_execution_scheduler" начиная c $(gv_intervalLog) по $(gv_scanned) записей нет. Письмо направляться не будет;
+    Call ReUpdateDate;
+	exit Script; 
+End if
+
+// преобразуем список тасков с конкатинацией по получаетлям и таскам
+Call AddReciverByFailedTask;
+
+For i=0 to NoOfRows('t_ForCycleMailing')
+  //Вытаскиваем получаетелей и таски по группировке, чтобы формировалось не одно общее письмо, а разделенная по получателям
+      let lv_tmp_cycleTasks = Peek('tasksName', i, 't_ForCycleMailing');
+      let lv_tmp_recievers = Peek('getter', i, 't_ForCycleMailing');
+      
+  //собираем текст письма для отправки
+      set lv_mailBody = 
+          'Добрый день!<br><br>
+          На сервере s201as-cn1.[host].local произошло падение таска(ов):
+          <br><b>$(lv_tmp_cycleTasks)</b><br><br>
+          Интервал проверки $(gv_intervalLog) - $(gv_scanned)<br>
+          Подробная информация доступна по <a href=https://s201as-cn1.[host].local/qmc/tasks>ссылке</a>.<br>
+          Директория с логами - <u><em>C:\QLIK\ArchivedLogs\s201as-cn1.[host].local\Script</em></u>
+          ';
+      
+  //отправляем сообщение
+      if Len(lv_tmp_cycleTasks) > 0 then 
+          if gv_Dbg then
+              lv_mailBody = '$(lv_mailBody)<br><br>TEST MODE<br> recievers: $(gv_to) $(lv_tmp_recievers)';
+              lv_tmp_recievers = gv_to;
+          Else
+              lv_tmp_recievers =  gv_to & lv_tmp_recievers;
+          End if
+
+		//тресировка просто для отслеживания в логах
+          trace Сообщение номер $(i);
+          trace получатели '$(lv_tmp_recievers)';
+          trace сообщение '$(lv_mailBody)';
+          Call ExecEmail (gv_qwcConnectionName, gv_timestamp, gv_serverName, gv_link, gv_subject, lv_tmp_recievers, lv_mailBody, gv_webConnectorsLib, gv_userName, gv_password, gv_SMTPServer, gv_port, gv_SSLmode, gv_html, gv_fromName, gv_fromEmail, gv_delayInSeconds, gv_ignoreProxy);
+      End if;
+      
+      lv_tmp_cycleTasks = Null();
+      lv_tmp_recievers = Null();
+Next i;
+
+Call ReUpdateDate;
+
+///////////////////////////// 2. Отправка писем
