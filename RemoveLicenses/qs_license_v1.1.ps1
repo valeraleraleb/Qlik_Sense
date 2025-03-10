@@ -1,4 +1,4 @@
-#=====================‘”Õ ÷»»===================================================
+#=====================–§–£–ù–ö–¶–ò–ò===================================================
 function WriteLog
 {
     Param ([string]$LogString)
@@ -8,17 +8,17 @@ function WriteLog
     Add-content $LogFile -value $LogMessage
 }
 
-#=====================œ”“»===================================================
+#=====================–ü–£–¢–ò===================================================
 # Path to your .pfx certificate
 # $pfxPath = "C:\QlikSense Server Space\Serts\S201TST-CN1\client.pfx"
 $pfxPath = "C:\QLIK\Certificates\Qlik\S201AS-CN1.[host].LOCAL\server.pfx"
 $Logfile = "C:\QLIK\Scripts\RemoveLicenses\logs_removed\$((Get-Date).toString("yyyy-MM-dd"))_PS.log"
 
-#=====================ÃŒƒ”À‹===================================================
+#=====================–ú–û–î–£–õ–¨===================================================
 Import-Module "C:\QLIK\Scripts\RemoveLicenses\qlik-cli.1.23.1\Qlik-Cli.psd1"
 
 
-#=====================œ≈–≈Ã≈ÕÕ€≈===================================================
+#=====================–ü–ï–†–ï–ú–ï–ù–ù–´–ï===================================================
 # Server details
 $server = "https://s201as-cn1.[host].local"
 
@@ -29,7 +29,7 @@ $pfxCert.Import($pfxPath, "", "Exportable,PersistKeySet")
 # Connect to the Qlik server
 # Connect-Qlik -Server $server -Certificate $pfxCert
 
-#=====================œ–Œ÷≈——===================================================
+#=====================–ü–†–û–¶–ï–°–°===================================================
 # Get the list of all users
 $users = Get-QlikUser -filter "removedExternally eq True" -full #Get-QlikUser -full
 
@@ -38,7 +38,7 @@ WriteLog  "Removing removedExternally users..."
 if ($users) {
     foreach ($user in $users) {
         # Deallocate users
-        Remove-QlikUser†-id $user.id
+        Remove-QlikUser¬†-id $user.id
         WriteLog  "RemovedExternally user deallocated|$($user.userId)|$($user.name)|$($user.lastUsed)"
      }
 } else {
