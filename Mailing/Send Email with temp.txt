@@ -1,4 +1,6 @@
-﻿Sub ExecEmail (QwcConnectionName, Timestamp, ServerName, Link, Subject, To, MailBodyInput, WebConnectorsLib, UserName, Password, SMTPServer, Port, SSLmode, html, fromName, fromEmail, delayInSeconds, ignoreProxy)
+// RU
+
+Sub ExecEmail (QwcConnectionName, Timestamp, ServerName, Link, Subject, To, MailBodyInput, WebConnectorsLib, UserName, Password, SMTPServer, Port, SSLmode, html, fromName, fromEmail, delayInSeconds, ignoreProxy)
 
 //Проходимся по всем полям кроме пароля
 for Each item in 'QwcConnectionName', 'Timestamp', 'ServerName', 'Link', 'Subject', 'To', 'MailBodyInput', 'WebConnectorsLib', 'UserName', 'SMTPServer', 'Port', 'SSLmode', 'html', 'fromName', 'fromEmail', 'delayInSeconds', 'ignoreProxy'
@@ -21,7 +23,6 @@ LOAD
     filesattached as SendEmail_filesattached
 FROM [$(vQwcConnectionName)]
 (URL IS [http://localhost:5555/data?connectorID=SMTPConnector&table=SendEmail&UserName=$(UserName_temp)&Password=$(Password)&SMTPServer=$(SMTPServer_temp)&Port=$(Port_temp)&SSLmode=$(SSLmode_temp)&to=$(To_temp)&subject=$(Subject_temp)&message=$(MailBodyInput_temp)&html=$(html_temp)&fromName=Qlik+Sender&fromEmail=A201-QS-SMTP%40....ru&delayInSeconds=0&ignoreProxy=False&appID=], qvx);
-
 
 
 End Sub;
