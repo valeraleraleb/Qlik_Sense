@@ -1,3 +1,5 @@
+// RU
+
 LOAD
     text(Concat(distinct "Placeforstorage/Местохранения", ', ')) as "Placeforstorage/Местохранения",
     //Upper(KeepChar([Description/ Спецификация], 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя0123456789')) as ост_НК_корр
