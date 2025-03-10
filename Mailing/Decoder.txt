@@ -1,0 +1,58 @@
+﻿// RU
+
+Sub StringDecoder(i_str_uncode)
+
+	//загружаем таблицу, содержащую соответствие между символом и его процент-кодом
+	TBL_TableDecoder:
+		Load * From [lib://Qlik Sense Server Space/Transform/Other/TableDecoderRus.qvd] (qvd);
+        
+	//таблица для записи символа и его процент-кода     
+    Let column_name_1 = 'Order';
+    Let column_name_2 = 'Encode';
+    TBL_Encode:
+    	Load * Inline [
+        	$(column_name_1), $(column_name_2)
+        ];
+
+	//в цикле будем вытаскивать каждый символ из слова и кодировать его
+    For cnt = 1 To Len(i_str_uncode)
+		
+        //записываем символ в переменную
+        Let findSymbol = Mid(i_str_uncode, cnt, 1);
+
+        //получаем ACSII символа
+        //если значение ACSII между (65 и 90 - для английских заглавных буквы) ИЛИ
+        //если значение ACSII между (97 и 122 - для английских прописных буквы) 
+        // - то это английская буква и ее не зашифровываем        
+        If ((Ord(findSymbol)>= 65) and (Ord(findSymbol)<= 90)) or ((Ord(findSymbol)>= 97) and (Ord(findSymbol)<= 122)) Then 
+            Concatenate(TBL_Encode)
+            	//была проблема с квадратной скобкой. Решение - community.qlik.com/t5/New-to-Qlik-Analytics/Mapping-Inline-Table/td-p/1880055
+                Load * Inline "
+                	$(column_name_1), $(column_name_2)
+                    $(cnt), '$(findSymbol)'
+                ";
+		
+        //иначе тянем для символа процент-код из таблицы 
+		Else
+            TBL_Encode:
+                Load 
+                    '$(cnt)' as $(column_name_1),
+                    [UTF] as $(column_name_2)
+                Resident TBL_TableDecoder
+                Where [Символ] = '$(findSymbol)';
+        End if;
+        
+    Next cnt;
+
+	//"схлопываем" все строки с процент-кодами в одну строку
+    TBL_Result:
+        Load 
+            Concat([Encode], '', [Order]) as ConcatEnCode
+        Resident TBL_Encode;
+        
+    //записываем в переменную полученный процент-код
+    Let EncodeString = Peek('ConcatEnCode', 0, 'TBL_Result');
+    
+    Drop Table TBL_TableDecoder, TBL_Encode, TBL_Result;
+    
+End Sub;
