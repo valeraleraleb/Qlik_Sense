@@ -1,0 +1,137 @@
+Sub StaticCount (vTablename)
+
+    let table_count = NoOfRows('$(vTablename)');
+
+    // Перебор всех полей в таблице
+    FOR i = 1 to NoOfFields('$(vTablename)')
+
+        //trace $(i) номер поля;
+
+        LET fieldName = FieldName(i, '$(vTablename)');
+
+        trace Имя поля - $(fieldName);
+
+        //Считаем пустые значения для каждого поля
+        ValuesStat:
+        LOAD
+            '$(fieldName)' as FieldName
+            , $(table_count) as Total
+            , Count([$(fieldName)]) as Count
+            , round((Count([$(fieldName)]) / $(table_count)) * 100, 0.1) & ' %' as %_all
+            , Count(DISTINCT([$(fieldName)])) as Uniq
+            , round((Count(DISTINCT([$(fieldName)])) / $(table_count)) * 100, 0.1) & ' %' as %_uniq
+            , Count(If(IsNull([$(fieldName)]) or Len(Trim([$(fieldName)])) = 0, 1)) as EmptyCount
+            , round((Count(If(IsNull([$(fieldName)]) or Len(Trim([$(fieldName)])) = 0, 1)) / $(table_count)) * 100, 0.1) & ' %' as %_empty
+            , round(Min([$(fieldName)]), 0.1)  AS MinValue
+            , round(Max([$(fieldName)]), 0.1) AS MaxValue
+            , round(Avg([$(fieldName)]), 0.1) AS AvgValue
+            , round(Median([$(fieldName)]), 0.1) AS MedianValue
+            , Mode([$(fieldName)]) AS Mode
+            , if (isnum([$(fieldName)]), 'Число', 'Текст') as Data_type
+            , '$(fieldName)' & if (isnum([$(fieldName)]), 'Число', 'Текст') as Key_top
+        Resident [$(vTablename)]
+        group by '$(fieldName)', if (isnum([$(fieldName)]), 'Число', 'Текст')
+        ;
+
+        Types_data:
+        load 
+            '$(fieldName)' as FieldName, 
+            count(DISTINCT if (isnum([$(fieldName)]), 'Число', 'Текст')) as Count_types
+        resident [$(vTablename)]
+        group by 1;
+
+        let count_types = peek('Count_types', 0, 'Types_data');
+
+        trace $(count_types) значение;
+
+
+        Value_top_Count:
+        LOAD
+            '$(fieldName)' as FieldName_
+            , [$(fieldName)] as Values
+            , if (isnum([$(fieldName)]), 'Число', 'Текст') as Data_type_
+            , '$(fieldName)' & if (isnum([$(fieldName)]), 'Число', 'Текст') as Key_top
+            , Count([$(fieldName)]) as Freq
+        Resident [$(vTablename)]
+        group by 
+            '$(fieldName)'
+            , [$(fieldName)]
+            , if (isnum([$(fieldName)]), 'Число', 'Текст')
+            , '$(fieldName)' & if (isnum([$(fieldName)]), 'Число', 'Текст')
+        ;
+
+    NEXT i;
+
+    TempTable:
+    NoConcatenate
+    load distinct Key_top
+    Resident Value_top_Count;
+
+    let vTableName = 'Top_5';
+
+    for each vValue in FieldValueList('Key_top')
+
+        [$(vTableName)_$(vValue)]:
+        NoConcatenate
+        Load Key_top, 
+            Values as [data_$(vValue)]
+        Resident Value_top_Count
+        where Key_top = '$(vValue)' and rowno() <= 4
+        Order by Freq DESC;
+
+    next
+
+    drop table Value_top_Count;
+
+    for each vValue in FieldValueList('Key_top')
+
+        [$(vTableName)]:
+        Load Key_top, 
+            concat('"' & [data_$(vValue)] & '"', ', ') as Top_5
+        Resident [$(vTableName)_$(vValue)]
+        Group by Key_top;
+
+        drop table [$(vTableName)_$(vValue)];
+
+    next
+
+    drop table TempTable, [$(vTablename)];
+
+
+    store Top_5 into 'lib://Qlik Sense Server Space/Extract/КИЦ/Анализ данных/$(vTablename)/Top_5_$(vDay).qvd'(qvd);
+    store ValuesStat into 'lib://Qlik Sense Server Space/Extract/КИЦ/Анализ данных/$(vTablename)/ValuesStat_$(vDay).qvd'(qvd);
+    store Types_data into 'lib://Qlik Sense Server Space/Extract/КИЦ/Анализ данных/$(vTablename)/Types_data_$(vDay).qvd'(qvd);
+    
+    drop tables Top_5, ValuesStat, Types_data;
+
+end sub;
+
+
+/////////////// Example_1
+
+FOR each lv_file in filelist ('lib://CP & DMS Extract/CP/Документы/Документы_*.qvd')
+
+	lv_tablename = TextBetween('$(lv_file)', 'Документы_', '.qvd', 1);
+
+    [Документы]:
+    LOAD
+        *
+        , '$(lv_tablename)' as [Имя таблицы]
+        , if (eif_project_ref = '$(lv_tablename)', 'Нет ошибки', 'Есть ошибка') as [Проверка]
+    FROM '$(lv_file)'
+    (qvd);
+
+next lv_file;
+
+Call StaticCount('Документы');
+
+
+/////////////// Example_2
+
+[Реестр_заявок]:
+LOAD
+    *
+FROM [lib://SharePoint/Register_Applications/Report.qvd]
+(qvd);
+
+Call StaticCount('Реестр_заявок');
