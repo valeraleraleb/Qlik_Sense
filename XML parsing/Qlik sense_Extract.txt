@@ -1,3 +1,5 @@
+// RU
+
 LIB CONNECT TO '1С ШР';
 
 [Agreements]:
@@ -46,7 +48,7 @@ FOR vStartRow = 0 TO vTotalRows STEP vBatchSize //////// TO vTotalRows
 
     Let vRequestBody ='';
 
-    let vRequestBody = vRequestBody &'<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:web="http://sibur.ru/integration/QlikSense"><soapenv:Header/> ';
+    let vRequestBody = vRequestBody &'<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:web="http://[host].ru/integration/QlikSense"><soapenv:Header/> ';
     let vRequestBody = vRequestBody &'<soapenv:Body>';
     let vRequestBody = vRequestBody &'<web:GetContractExecution>';
     let vRequestBody = vRequestBody &'<web:ContractCode>$(v_agreement)';
@@ -143,6 +145,6 @@ ORDER by длина DESC;   // первым должен идти та стро�
 
 drop table MainTable#tmp;
 
-store MainTable into '$(gv_ExtractFolder)/КодШР/main_data_ПИ.qvd' (qvd);
+store MainTable into '$(gv_ExtractFolder)/КодШР/main_data_[name].qvd' (qvd);
 
 drop Tables MainTable, Agreements;
