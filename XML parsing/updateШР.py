@@ -1,4 +1,5 @@
-﻿import argparse
+# совместно с https://github.com/GrowShip
+import argparse
 import pandas as pd
 import xml.etree.ElementTree as ET
 from pyqvd import QvdTable
