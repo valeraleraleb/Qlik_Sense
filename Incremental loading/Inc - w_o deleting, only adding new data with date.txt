@@ -1,0 +1,256 @@
+// RU
+
+
+// Таблица "RP"
+Set vRPFields = '
+      "r_object_id",
+      "eif_rp_reason",
+      "eif_rp_name",
+      "eif_rp_date_due",
+      "eif_rp_date_completed",
+      "eif_rp_status",
+      "r_modify_date",
+      "sib_rp_local_id",
+      "eif_tr_category",
+      "eif_rp_date_start"
+';
+
+/*---------------------Полная загрузка------------------*/
+
+SUB FullExtractTableFromCP (TableName ,query, fields, vItemsPerPage, Project)
+
+	set vNewLineChr = '
+	';
+
+	let vPage = 1; 
+	let vLinesFetchedAfterPrevIter = 0;
+
+	let query = PurgeChar('$(query)', '$(vNewLineChr)"');
+
+    // много страниц и каждый лист таблицы максимально содержит 3400 строк (установка в настройках Vars) + может падать соединение, если много строк
+    // поэтому идет сбор информации с каждой страницы по фильтру из запросов
+	do while true()   //vPage <= 250 
+
+      [$(TableName)]:
+      Load
+      	*
+        , '$(vLoadDate)' as load_date
+	  ;      	
+      SQL SELECT 
+          (SELECT 
+              (SELECT 
+                  (SELECT 
+                          $(fields)
+                      FROM "properties" PK "__KEY_properties" FK "__FK_properties")
+              FROM "content" PK "__KEY_content" FK "__FK_content")
+          FROM "entries" PK "__KEY_entries" FK "__FK_entries")
+      FROM JSON (wrap on) "root" PK "__KEY_root"
+
+      WITH CONNECTION (
+      QUERY "dql" "$(query)",
+      QUERY "items-per-page" "$(vItemsPerPage)",
+      QUERY "page" "$(vPage)"
+      );
+
+      let linesFetched = NoOfRows('$(TableName)');
+      let lastFetch = linesFetched - vLinesFetchedAfterPrevIter;
+
+      if lastFetch < vItemsPerPage  then
+          exit do;
+      else
+          let vLinesFetchedAfterPrevIter = linesFetched;
+          let vPage = vPage + 1;
+      end if;
+
+	loop;
+
+    // если таблица не общая, то сохраняется по проектам    
+    if '$(TableName)' = 'PVA' then
+    		store [$(TableName)] into '$(p_KIC_Extract_Folder)/CP/PVA/$(TableName)_$(Project).qvd' (qvd); 
+    elseif '$(TableName)' = 'RP' then
+    		store [$(TableName)] into '$(p_KIC_Extract_Folder)/CP/RP/$(TableName)_$(Project).qvd' (qvd);    
+    end if; 
+    
+    trace Загружен и сохранен '$(TableName)' по '$(Project)';
+    
+     if index('$(list_table)', '$(TableName)') = 0 then
+        if len('$(list_table)') > 0 then
+            let list_table = '$(list_table), ' & '$(TableName)';
+        else  
+            let list_table = '$(TableName)';
+        end if;   
+      end if;
+    
+    drop Table [$(TableName)];
+
+End Sub;
+
+/*---------------------Инкрементальная загрузка ------------------*/
+
+Sub IncExtractRPFromCP(TableName ,IncQuery, fields, vItemsPerPage, Project)
+
+	Set vNewLineChr = '
+';
+
+	Let vPage = 1;
+    Let vLinesFetchedAfterPrevIter = 0;
+    Let IncQuery = PurgeChar('$(IncQuery)', '$(vNewLineChr)"');
+
+
+    // много страниц и каждый лист таблицы максимально содержит 3400 строк (установка в настройках Vars) + может падать соединение, если много строк
+    // поэтому идет сбор информации с каждой страницы по фильтру из запросов
+    do while true()
+        [$(TableName)]:
+		Load
+			*
+           	, '$(vLoadDate)' as load_date
+		;
+        SQL SELECT 
+            (SELECT 
+                (SELECT 
+                    (SELECT 
+                            $(fields)
+                        FROM "properties" PK "__KEY_properties" FK "__FK_properties")
+                FROM "content" PK "__KEY_content" FK "__FK_content")
+            FROM "entries" PK "__KEY_entries" FK "__FK_entries")
+        FROM JSON (wrap on) "root" PK "__KEY_root"
+      
+        WITH CONNECTION (
+        QUERY "dql" "$(IncQuery)",
+        QUERY "items-per-page" "$(vItemsPerPage)",
+        QUERY "page" "$(vPage)"
+        );
+
+        Let linesFetched = NoOfRows('$(TableName)');
+        Let lastFetch = linesFetched - vLinesFetchedAfterPrevIter;
+
+        if lastFetch < vItemsPerPage  then
+            exit do;
+        else
+            Let vLinesFetchedAfterPrevIter = linesFetched;
+            Let vPage = vPage + 1;
+        end if;
+    loop;
+
+   	// если строк таблицы больше 0, то соединим с уже существующей таблицей
+	If linesFetched >0 then
+    
+    	if '$(TableName)' = 'PVA' then
+      		Concatenate([$(TableName)])
+      		LOAD *
+      		FROM '$(p_KIC_Extract_Folder)/CP/PVA/$(TableName)_$(Project).qvd' (qvd);
+
+      		store [$(TableName)] into '$(p_KIC_Extract_Folder)/CP/PVA/$(TableName)_$(Project).qvd' (qvd);
+    
+    	elseif '$(TableName)' = 'RP' then
+      		Concatenate([$(TableName)])
+      		LOAD *
+      		FROM '$(p_KIC_Extract_Folder)/CP/RP/$(TableName)_$(Project).qvd' (qvd);
+    		store [$(TableName)] into '$(p_KIC_Extract_Folder)/CP/RP/$(TableName)_$(Project).qvd' (qvd);   
+         end if;
+
+	End If;
+    
+     if index('$(list_table)', '$(TableName)') = 0 then
+        if len('$(list_table)') > 0 then
+            let list_table = '$(list_table), ' & '$(TableName)';
+        else  
+            let list_table = '$(TableName)';
+        end if;   
+      end if;    
+    
+     
+    trace Загружен и сохранен '$(TableName)' по '$(Project)';
+    
+    drop Table [$(TableName)];
+
+End Sub;
+
+
+//---------------------Загрузка в зависимости от режима загрузки и проектов------------------
+
+Sub LaunchExtract (project, vReloadMode)
+   
+   // дата для инкрементной загрузки 
+    Set vIncLoadDateRange =  'r_modify_date >= date(''$(vReloadDate_first) 00:00:00'', ''dd.MM.yyyy hh:mi:ss'') and r_modify_date <= date(''$(vReloadDate_last) 23:59:59'', ''dd.MM.yyyy hh:mi:ss'')';
+
+   // выбор проекта (фильтр по проекту) 
+	Set vProject_path ='eif_project_ref = ''$(project)''';
+    
+    // запросы, которые меняеются в зависимости от режима загрузки
+    
+    If $(vReloadMode) = 1 then
+    
+    trace start 1 mode - full;
+    
+		// RP
+        Let vFULL_RPQuery = '
+              select $(vRPFields) 
+              from eifx_transmittal 
+              where $(vProject_path)
+              and eif_rp_reason is not null
+              enable (row_based)
+        ';
+		
+        
+	///// Загрузка ----------------------
+      
+      Call FullExtractTableFromCP ('RP', vFULL_RPQuery, vRPFields, vItemsPerPage, project); 
+
+	///// Загрузка ----------------------
+
+    ElseIf $(vReloadMode) = 0 then
+    
+    trace start 0 mode - increment c '$(vReloadDate_first)' по '$(vReloadDate_last)';
+
+        //RP
+        Let vINC_RPQuery = '
+              select $(vRPFields) 
+              from eifx_transmittal 
+              where $(vIncLoadDateRange) 
+              and eif_rp_reason is not null
+              and $(vProject_path)
+              enable (row_based)
+              ';
+		
+
+		///// Загрузка ----------------------
+  
+        Call IncExtractRPFromCP ('RP', vINC_RPQuery, vRPFields, vItemsPerPage, project);
+
+		///// Загрузка ----------------------
+        
+	end if;
+      
+End Sub;
+
+
+// для таблиц, которые привязаны к проектам 
+
+LIB CONNECT TO 'CP_Prod';
+
+for each project in FieldValueList('Project_name')
+
+	trace Загружается '$(project)';
+    
+	Call LaunchExtract('$(project)', 0)   //0- increment, 1-full
+   
+next project;
+
+DisConnect;
+
+// для проверки
+Date:
+    Load '$(vReloadDate_last)' as date_load
+AutoGenerate 1;
+
+Tables:
+    Load '$(list_table)' as tables
+AutoGenerate 1;
+
+store Date into '$(p_KIC_Extract_Folder)/CP/A_RP_PVA_Date.txt' (txt);
+store Tables into '$(p_KIC_Extract_Folder)/CP/A_RP_PVA_Tables.txt' (txt);
+
+Drop Tables Date, Tables;
+
+
