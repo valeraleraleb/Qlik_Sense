@@ -1,4 +1,5 @@
 // RU
+// совместо с https://github.com/GrowShip
 ///////////////// 1. Извлечение данных по базам
 
 Sub Parsing_XML_new (path_from, path_to)
