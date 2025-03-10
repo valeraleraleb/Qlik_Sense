@@ -8,6 +8,6 @@
 | Mailing               | Codes for mailing |
 | Models                | Creating data model |
 | Scripts               | Short scripts |
-| RemoveLicenses        | Qlik Qli for removing licenses |
+| RemoveLicenses        | Qlik Cli for removing licenses |
 | Stat                  | EDA code |
 
