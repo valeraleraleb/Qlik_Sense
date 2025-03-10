@@ -5,3 +5,6 @@
 
 The dashboard on the trigger in the schedule runs the script ps1 which is connected by the Qlik Qli module to QS 
 and requests users Removed Externelly and utilizes inactive licenses with a delta per day
+
+---
+https://github.com/ahaydon/Qlik-Cli-Windows
