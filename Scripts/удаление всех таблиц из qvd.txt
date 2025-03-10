@@ -1,3 +1,5 @@
+// RU
+
 LET vL.NumTabelle = NoOfTables();
  
 FOR j=0 to $(vL.NumTabelle)-1
