@@ -1,0 +1,17 @@
+﻿// RU
+Описание входных параметров:
+-QwcConnectionName - путь до коннектора
+-WebConnectorsLib - путь до сервера с Web connectors, по дефолту можно обратиться через localhost (например, 'http://localhost:5555/')
+-UserName - имя УЗ для отправки писем, например '[HOST]\A201-QS-SMTP'
+-Password - пароль для УЗ
+-SMTPServer - пример: "smtp.[host].local"
+-Port - по дефолту 25
+-SSLmode - протокол безопасности, например, 'None'
+-To - email пользователей, на кого необходимо осуществить рассылку. Можно указать через ";", например user1@mail.com;user2@mail.com
+-Subject - тема письма
+-MailBodyInput - текст письма
+-html - поддержка синтаксиса html в теле письма. Значения - True|False
+-fromName - от какого имени придет пиьсмо
+-fromEmail - от какого email придет пиьсмо
+-delayInSeconds - delay
+-ignoreProxy - прокси, True|False
