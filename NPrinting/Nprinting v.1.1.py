@@ -27,7 +27,7 @@ QSbookmarkId = 'e5031d69-9d28-47a7-81f3-0abd2efc8e7a' # id of bookmark from sigl
 gv_mainSaveDir = "C:\Qlik Server Space\Extract\CP\SentToSharePoint"
 # do you need to save to sharepoint?
 isSaveToSP = False 
-gv_pathToSharePoing = r"\\department.[host].ru@SSL\DavWWWRoot\sites\qlik\DocLib2\QS - АГХК список документов"
+gv_pathToSharePoing = r"\\department.[host].ru@SSL\DavWWWRoot\sites\qlik\DocLib2\QS - список документов"
 # r"\\department.nipigas.ru@SSL\DavWWWRoot\sites\qlik\Tst"
 print("Temp folder: " +gv_mainSaveDir)
 print("Target folder: " + gv_pathToSharePoing)
