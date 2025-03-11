@@ -10,4 +10,5 @@
 | Scripts               | Short scripts |
 | RemoveLicenses        | Qlik Cli for removing licenses |
 | Stat                  | EDA code |
+| NPrinting             | Py code simulating the operation of technology |
 
