@@ -1,0 +1,4 @@
+if(SubStringCount('|' & Concat({$3} distinct [$1], '|') & '|', '|$2|') and GetSelectedCount([$1],False(),'$3'),1,0)
+
+for non-existent values ​​in flexible report (snowflake model)
+=if(aggr(count([Группа ПО]), key) = 0, 'N/A', [Группа ПО])
